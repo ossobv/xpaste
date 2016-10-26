@@ -1,4 +1,4 @@
-xpaste (0.9a~all) UNRELEASED; urgency=low
+xpaste (1.0~all) UNRELEASED; urgency=low
 
   * Initial version.
   * Bugs:
@@ -6,4 +6,4 @@ xpaste (0.9a~all) UNRELEASED; urgency=low
       and either on python-xlib or python3-xlib. But if your python defaults
       to python2, you won't have any use for the dependency on python3-xlib.
 
- -- Walter Doekes <wjdoekes+xpaste@osso.nl>  Wed, 26 Oct 2016 10:46:08 +0200
+ -- Walter Doekes <wjdoekes+xpaste@osso.nl>  Wed, 26 Oct 2016 11:11:42 +0200
