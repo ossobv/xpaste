@@ -1,0 +1,261 @@
+#!/usr/bin/env python
+# xpaste - paste text into X11 windows that don't work with selections
+# Copyright (C) 2016  Walter Doekes, OSSO B.V.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+#
+# xpaste takes input from stdin and "pastes" it by sending keypress
+# events to the window of your choosing. This works around the fact
+# that some applications don't accept selection/clipboard pastes.
+#
+# See README.rst or xpaste.1x for more info. See LICENSE for license.
+#
+# Sample code borrowed from:
+# - http://www.shallowsky.com/software/crikey/pykey-0.1 (GPLv2+, 2008)
+#   by Akkana Peck
+# Similar applications:
+# - xdotool, almost works, but lacks the ability to choose the right
+#   window. If we got that right, we could do:
+#   "xdotool type --window WIN --file - <<EOF"
+#
+from __future__ import print_function
+
+from collections import namedtuple
+import sys
+import time
+
+import Xlib.display
+import Xlib.X
+import Xlib.XK
+import Xlib.protocol.event
+
+
+# Display-agnostic keyboard symbol
+Key = namedtuple('Key', 'symbol is_shifted')
+# Display-aware keyboard symbol
+Keystate = namedtuple('Keystate', 'mod code')
+
+
+class TextToKeys(object):
+    special_X_keysyms = {
+        ' ': 'space',
+        '\t': 'Tab',
+        # Keyboard Enter maps to Return, which is usually translated to
+        # LF when typing, so in the reverse we do that too.
+        '\n': 'Return',
+        # Mark this bad so we don't paste it accidentally.
+        '\r': Xlib.X.NoSymbol,
+        '\e': 'Escape',
+        '!': 'exclam',
+        '#': 'numbersign',
+        '%': 'percent',
+        '$': 'dollar',
+        '&': 'ampersand',
+        '"': 'quotedbl',
+        "'": 'apostrophe',
+        '(': 'parenleft',
+        ')': 'parenright',
+        '*': 'asterisk',
+        '=': 'equal',
+        '+': 'plus',
+        ',': 'comma',
+        '-': 'minus',
+        '.': 'period',
+        '/': 'slash',
+        ':': 'colon',
+        ';': 'semicolon',
+        '<': 'less',
+        '>': 'greater',
+        '?': 'question',
+        '@': 'at',
+        '[': 'bracketleft',
+        ']': 'bracketright',
+        '\\': 'backslash',
+        '^': 'asciicircum',
+        '_': 'underscore',
+        '`': 'grave',
+        '{': 'braceleft',
+        '|': 'bar',
+        '}': 'braceright',
+        '~': 'asciitilde'
+    }
+
+    def __call__(self, text):
+        return [Key(self.to_keysym(ch), self.is_shifted(ch)) for ch in text]
+
+    def to_keysym(self, ch):
+        "The X-keysymbol for this character."
+        keysym = self.special_X_keysyms.get(ch, ch)
+        return Xlib.XK.string_to_keysym(keysym)
+
+    def is_shifted(self, ch):
+        "Whether we need a shift-key. Works on US keyboard only."
+        if ch.isupper():
+            return True
+        return (ch in '~!@#$%^&*()_+{}|:"<>?')
+
+
+# A functor as text-to-keys converter.
+text_to_keys = TextToKeys()
+
+
+class KeysToKeystates(object):
+    def __init__(self, display):
+        self.display = display
+
+    def __call__(self, keys):
+        return [self.to_keystate(key) for key in keys]
+
+    def to_keystate(self, key):
+        mod = (0, Xlib.X.ShiftMask)[key.is_shifted]
+        code = self.display.keysym_to_keycode(key.symbol)
+        assert code != 0, 'cannot map %r' % (key,)
+        return Keystate(mod, code)
+
+
+class EventGenerator(object):
+    def __init__(self, display, window):
+        self.display = display
+        self.window = window
+        self.root = display.screen().root
+        self.keys_to_keystates = KeysToKeystates(display)
+        self.timedelta = 50  # 50 ms per event
+        self.time = (int(time.time() * 1000) - self.timedelta) % 0x100000000
+
+    def from_text(self, text):
+        for key in text_to_keys(text):
+            keystate = self.keys_to_keystates.to_keystate(key)
+            for event in self.keypress(keystate):
+                yield event
+
+    def keypress(self, keystate):
+        yield Xlib.protocol.event.KeyPress(
+            time=self.key_time(), root=self.root, window=self.window,
+            same_screen=0, child=Xlib.X.NONE,
+            root_x=0, root_y=0, event_x=0, event_y=0,
+            state=keystate.mod, detail=keystate.code)
+        yield Xlib.protocol.event.KeyRelease(
+            time=self.key_time(), root=self.root, window=self.window,
+            same_screen=0, child=Xlib.X.NONE,
+            root_x=0, root_y=0, event_x=0, event_y=0,
+            state=keystate.mod, detail=keystate.code)
+
+    def key_time(self):
+        self.time = (self.time + self.timedelta) % 0x100000000
+        return self.time
+
+
+class XPaste(object):
+    @staticmethod
+    def get_display():
+        """Wrapper around Xlib.display.Display() to silence debug-print bug.
+
+        Display() prints "<class ...>" to stdout.
+        URL: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=566172
+        This is fixed in 0.14+20091101-4. Work around it by temporarily
+        setting stdout to /dev/null.
+        """
+        with open('/dev/null', 'w') as tmp_stdout:
+            orig_stdout, sys.stdout = sys.stdout, tmp_stdout
+            display = Xlib.display.Display()
+            sys.stdout = orig_stdout
+        return display
+
+    def __init__(self):
+        self.display = self.get_display()
+
+    def get_current_window(self):
+        "Return currently focused window."
+        return self.display.get_input_focus().focus
+
+    def wait_for_keypress(self):
+        "Stall until 'Enter' is pressed."
+        enter_keystate = KeysToKeystates(self.display)(text_to_keys('\n'))[0]
+        root = self.display.screen().root
+
+        # Through testing, it appears that using ORed modifiers does
+        # not yield grab_key events if not *all* of the modifiers are
+        # used. Instead, we'll grab_key() all of the sane combinations.
+        #
+        # Also, using Xlib.X.AnyModifier gives us a BadAccess error,
+        # possibly because the main window manager also traps that?
+        # > If some other client has issued a XGrabKey() with the same
+        # > key combination on the same window, a BadAccess error
+        # > results. When using AnyModifier or AnyKey, the request fails
+        # > completely, and a BadAccess error results (no grabs are
+        # > established) if there is a conflicting grab for any
+        # > combination.
+        extra_mods = (
+            # All combinations of caps- and num-lock.
+            0, Xlib.X.Mod2Mask, Xlib.X.LockMask,
+            Xlib.X.Mod2Mask | Xlib.X.LockMask)
+
+        # Listen for the Enter key.
+        for extra_mod in extra_mods:
+            root.grab_key(
+                enter_keystate.code, enter_keystate.mod | extra_mod,
+                True, Xlib.X.GrabModeAsync, Xlib.X.GrabModeAsync)
+
+        # Loop until we have it.
+        while True:
+            event = self.display.next_event()
+            if (event.type == Xlib.X.KeyRelease and
+                    event.detail == enter_keystate.code):
+                # Ignore event.window and event.child. They are not the
+                # input windows we're after.
+                break
+
+        # Stop listening.
+        for extra_mod in extra_mods:
+            root.ungrab_key(
+                enter_keystate.code, enter_keystate.mod | extra_mod)
+
+    def paste_into(self, window, text):
+        # print('paste into', window)
+        for event in EventGenerator(self.display, window).from_text(text):
+            window.send_event(event, propagate=True)
+        self.display.sync()
+
+
+# def example_paste_into_focused():
+#     xpaste = XPaste()
+#     xpaste.paste_into(xpaste.get_current_window(), 'Hi there!')
+#
+# def example_paste_into_keypressed():
+#     xpaste = XPaste()
+#     xpaste.wait_for_keypress()
+#     xpaste.paste_into(xpaste.get_current_window(), 'Hi there!')
+
+def main():
+    # Open display immediately, so user gets error if there is no valid
+    # DISPLAY.
+    xpaste = XPaste()
+
+    if sys.stdin.isatty():
+        print('| xpaste allows you to paste text into windows that fail to')
+        print('| work with the X11 selection buffers, like some Java apps.')
+        print('|')
+        print('| Example invocation: xsel -b | xpaste')
+        print('| Go to Java application: <press enter>')
+        print('|')
+        print('| Please type text to paste on stdin; end with [CTRL+D]')
+    text = sys.stdin.read().replace('\r', '')
+
+    if sys.stdin.isatty():
+        print('|')
+    print('| Focus on the destination window to paste into and press [Enter] ')
+    print('| or abort with [CTRL+C].')
+
+    if not text.endswith('\n'):
+        print('|')
+        print('| The input does not end with a line feed. You may need to ')
+        print('| press enter twice.')
+    xpaste.wait_for_keypress()
+    xpaste.paste_into(xpaste.get_current_window(), text)
+
+if __name__ == '__main__':
+    main()

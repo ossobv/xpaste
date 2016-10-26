@@ -1,0 +1,24 @@
+.TH XPASTE "1x" "October 2016" "xpaste 0.9a" "User Commands"
+.SH NAME
+xpaste \- paste text into X windows that don't work with selections
+.SH SYNOPSIS
+.B xpaste
+<<EOF
+.br
+This text will be pasted into a window of your choosing.
+.br
+EOF
+.SH DESCRIPTION
+xpaste will read the text to paste from standard input, keep it in
+memory and wait for you to press ENTER.  When you do, it pastes the held
+text into the newly focused window.
+.SH COPYRIGHT
+Copyright \(co 2016 Walter Doekes, OSSO B.V.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.
+.br
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+.SH "SEE ALSO"
+xset(1), crikey(1)
+.PP
+See more details at <https://github.com/ossobv/xpaste>.

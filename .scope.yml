@@ -1,0 +1,9 @@
+# https://bettercodehub.com
+
+languages:
+  - name: python
+    production:
+      include:
+        - /xpaste
+      exclude:
+        - /setup.py
