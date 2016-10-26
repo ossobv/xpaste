@@ -8,7 +8,7 @@ if __name__ == '__main__':
 
     setup(
         name='xpaste',
-        version='1.0',
+        version='1.1',
         scripts=['xpaste'],
         data_files=[('', ['LICENSE.txt', 'README.rst'])],
         install_requires = [

@@ -102,6 +102,7 @@ class EventGenerator(object):
         self.keys_to_keystates = KeysToKeystates(display)
         self.timedelta = 50  # 50 ms per event
         self.time = (int(time.time() * 1000) - self.timedelta) % 0x100000000
+        self.rshift_code = self.display.keysym_to_keycode(Xlib.XK.XK_Shift_R)
 
     def from_text(self, text):
         for key in text_to_keys(text):
@@ -110,16 +111,29 @@ class EventGenerator(object):
                 yield event
 
     def keypress(self, keystate):
-        yield Xlib.protocol.event.KeyPress(
+        # Some applications explicitly need the SHIFT key pressed as well.
+        if keystate.mod & Xlib.X.ShiftMask:
+            yield self._new_press(state=0, detail=self.rshift_code)
+
+        yield self._new_press(state=keystate.mod, detail=keystate.code)
+        yield self._new_release(state=keystate.mod, detail=keystate.code)
+
+        if keystate.mod & Xlib.X.ShiftMask:
+            yield self._new_release(
+                state=Xlib.X.ShiftMask, detail=self.rshift_code)
+
+    def _new_press(self, state, detail):
+        return self._new_event(Xlib.protocol.event.KeyPress, state, detail)
+
+    def _new_release(self, state, detail):
+        return self._new_event(Xlib.protocol.event.KeyRelease, state, detail)
+
+    def _new_event(self, event, state, detail):
+        return event(
             time=self.key_time(), root=self.root, window=self.window,
             same_screen=0, child=Xlib.X.NONE,
             root_x=0, root_y=0, event_x=0, event_y=0,
-            state=keystate.mod, detail=keystate.code)
-        yield Xlib.protocol.event.KeyRelease(
-            time=self.key_time(), root=self.root, window=self.window,
-            same_screen=0, child=Xlib.X.NONE,
-            root_x=0, root_y=0, event_x=0, event_y=0,
-            state=keystate.mod, detail=keystate.code)
+            state=state, detail=detail)
 
     def key_time(self):
         self.time = (self.time + self.timedelta) % 0x100000000

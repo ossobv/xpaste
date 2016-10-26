@@ -1,3 +1,10 @@
+xpaste (1.1~all) UNRELEASED; urgency=low
+
+  * Fix problem where uppercase characters were not seen in the SuperMicro
+    Java iKVM. By adding the keypresses of the right shift, this is fixed.
+
+ -- Walter Doekes <wjdoekes+xpaste@osso.nl>  Wed, 26 Oct 2016 11:54:45 +0200
+
 xpaste (1.0~all) UNRELEASED; urgency=low
 
   * Initial version.
