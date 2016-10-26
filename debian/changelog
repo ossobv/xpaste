@@ -1,0 +1,9 @@
+xpaste (0.9a~all) UNRELEASED; urgency=low
+
+  * Initial version.
+  * Bugs:
+    - The control file specifies a dependency on either python or python3
+      and either on python-xlib or python3-xlib. But if your python defaults
+      to python2, you won't have any use for the dependency on python3-xlib.
+
+ -- Walter Doekes <wjdoekes+xpaste@osso.nl>  Wed, 26 Oct 2016 10:46:08 +0200

@@ -1,0 +1,18 @@
+Source: xpaste
+Maintainer: Walter Doekes <wjdoekes+xpaste@osso.nl>
+Section: universe/x11
+Priority: optional
+Standards-Version: 3.9.6
+Build-Depends: debhelper (>= 8)
+Build-Depends-Indep: python:any | python3:any, dh-python
+
+Package: xpaste
+Architecture: all
+Depends: python | python3, python-xlib | python3-xlib
+Description: paste text into X windows that don't work with selections
+ xpaste will read the text to paste from standard input, keep it in
+ memory and wait for you to press ENTER.  When you do, it pastes the held
+ text into the newly focused window.
+ .
+ This alleviates situations where you need to long or paste hard to type
+ text into X applications that do not work with the selection/clipboard.
