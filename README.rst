@@ -1,6 +1,8 @@
 xpaste - paste text into X windows that don't work with selections
 ==================================================================
 
+.. image:: https://bettercodehub.com/edge/badge/ossobv/xpaste
+
 SYNOPSIS
 --------
 
