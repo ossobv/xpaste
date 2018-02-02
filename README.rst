@@ -37,6 +37,11 @@ through the middle-mouse or CTRL-V:
 The pasting of text happens through "faked" keypress events.  And as you
 can see from the example, it works.
 
+**NOTE: xpaste does not work on Wayland because it disallows
+applications to meddle with other applications. However, you
+can start both applications under the Xwayland compatibility
+layer, e.g. from:** ``WAYLAND_DISPLAY= gnome-terminal``
+
 
 COPYRIGHT
 ---------

@@ -25,6 +25,7 @@
 from __future__ import print_function
 
 from collections import namedtuple
+import os
 import sys
 import time
 
@@ -159,6 +160,19 @@ class XPaste(object):
     def __init__(self):
         self.display = self.get_display()
 
+        # Quickly check that this will work.
+        if not hasattr(self.display.get_input_focus().focus, 'send_event'):
+            if os.environ.get('XDG_SESSION_TYPE') == 'wayland':
+                # Because we cannot just peek/poke in other windows on
+                # Wayland.
+                raise RuntimeError(
+                    'xpaste(1) does not work on Wayland, try starting an '
+                    'Xwayland X compatibility terminal first, by running '
+                    'WAYLAND_DISPLAY= gnome-terminal; and then fire up '
+                    'both applications from there.')
+            raise RuntimeError('No send_event on window objects? {0!r}'.format(
+                self.display.get_input_focus().focus))
+
     def get_current_window(self):
         "Return currently focused window."
         return self.display.get_input_focus().focus
@@ -243,7 +257,7 @@ def main():
             '| work with the X11 selection buffers, like some Java apps.\n'
             '|\n'
             '| Example invocation: xsel -b | xpaste\n'
-            '| Go to Java application: <press enter>\n'
+            '| Go to misbehaving application: <press enter>\n'
             '|\n'
             '| Please type text to paste on stdin; end with [CTRL+D]')
     text = sys.stdin.read().replace('\r', '')
