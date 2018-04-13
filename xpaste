@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # xpaste - paste text into X11 windows that don't work with selections
-# Copyright (C) 2016  Walter Doekes, OSSO B.V.
+# Copyright (C) 2016,2018  Walter Doekes, OSSO B.V.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,13 +35,11 @@ import Xlib.XK
 import Xlib.protocol.event
 
 
-# Display-agnostic keyboard symbol
-Key = namedtuple('Key', 'symbol is_shifted')
-# Display-aware keyboard symbol
+# Display-aware keyboard symbol.
 Keystate = namedtuple('Keystate', 'mod code')
 
 
-class TextToKeys(object):
+class TextToKeysyms(object):
     special_X_keysyms = {
         # This dict is collapsed into fewer lines to make a
         # BetterCodeHub false positive go away.
@@ -63,22 +61,20 @@ class TextToKeys(object):
     }
 
     def __call__(self, text):
-        return [Key(self.to_keysym(ch), self.is_shifted(ch)) for ch in text]
+        return [self.to_keysym(ch) for ch in text]
 
     def to_keysym(self, ch):
         "The X-keysymbol for this character."
+        # Example: ch in ('A', 'b', '%', '\n')
         keysym = self.special_X_keysyms.get(ch, ch)
-        return Xlib.XK.string_to_keysym(keysym)
-
-    def is_shifted(self, ch):
-        "Whether we need a shift-key. Works on US keyboard only."
-        if ch.isupper():
-            return True
-        return (ch in '~!@#$%^&*()_+{}|:"<>?')
+        # Example: keysym in ('A', 'b', 'percent', 'Return')
+        ret = Xlib.XK.string_to_keysym(keysym)
+        # Example: ret in (65, 98, 37, 65293)  [not always equal to ord(ch)]
+        return ret
 
 
 # A functor as text-to-keys converter.
-text_to_keys = TextToKeys()
+text_to_keysyms = TextToKeysyms()
 
 
 class KeysToKeystates(object):
@@ -88,10 +84,15 @@ class KeysToKeystates(object):
     def __call__(self, keys):
         return [self.to_keystate(key) for key in keys]
 
-    def to_keystate(self, key):
-        mod = (0, Xlib.X.ShiftMask)[key.is_shifted]
-        code = self.display.keysym_to_keycode(key.symbol)
-        assert code != 0, 'cannot map %r' % (key,)
+    def to_keystate(self, symbol):
+        # Example: [(38, 1), (38, 3)]  # for 65 ('A')
+        # Example: [(56, 0), (56, 2)]  # for 98 ('b')
+        # Example: [(14, 1), (14, 3)]  # for 37 ('%')
+        # Example: [(36, 0), (36, 2)]  # for 65293 (Return)
+        codes = self.display.keysym_to_keycodes(symbol)
+        assert codes, 'cannot map %r (got: %r)' % (symbol, codes)
+        code, mod = codes[0]
+        assert mod in (0, Xlib.X.ShiftMask), codes
         return Keystate(mod, code)
 
 
@@ -106,8 +107,8 @@ class EventGenerator(object):
         self.rshift_code = self.display.keysym_to_keycode(Xlib.XK.XK_Shift_R)
 
     def from_text(self, text):
-        for key in text_to_keys(text):
-            keystate = self.keys_to_keystates.to_keystate(key)
+        for symbol in text_to_keysyms(text):
+            keystate = self.keys_to_keystates.to_keystate(symbol)
             for event in self.keypress(keystate):
                 yield event
 
@@ -179,7 +180,8 @@ class XPaste(object):
 
     def wait_for_keypress(self):
         "Stall until 'Enter' is pressed."
-        enter_keystate = KeysToKeystates(self.display)(text_to_keys('\n'))[0]
+        enter_keystate = KeysToKeystates(self.display)(
+            text_to_keysyms('\n'))[0]
 
         self._grab_release(enter_keystate, release=False)
         try:
@@ -275,6 +277,7 @@ def main():
             '| to press [Enter] twice.')
     xpaste.wait_for_keypress()
     xpaste.paste_into(xpaste.get_current_window(), text)
+
 
 if __name__ == '__main__':
     main()
