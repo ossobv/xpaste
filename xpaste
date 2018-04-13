@@ -180,16 +180,16 @@ class XPaste(object):
 
     def wait_for_keypress(self):
         "Stall until 'Enter' is pressed."
-        enter_keystate = KeysToKeystates(self.display)(
-            text_to_keysyms('\n'))[0]
+        enter_keystates = KeysToKeystates(self.display)([
+            Xlib.XK.XK_Return, Xlib.XK.XK_KP_Enter])
 
-        self._grab_release(enter_keystate, release=False)
+        self._grab_release(enter_keystates, release=False)
         try:
-            self._wait_for_keyrelease_event(enter_keystate)
+            self._wait_for_keyrelease_event(enter_keystates)
         finally:
-            self._grab_release(enter_keystate, release=True)
+            self._grab_release(enter_keystates, release=True)
 
-    def _grab_release(self, keystate, release=False):
+    def _grab_release(self, keystates, release=False):
         "Grab or release the listening for keypress events."
         root = self.display.screen().root
 
@@ -213,20 +213,22 @@ class XPaste(object):
         if release:
             # Stop listening for the specified key.
             for extra_mod in extra_mods:
-                root.ungrab_key(keystate.code, keystate.mod | extra_mod)
+                for keystate in keystates:
+                    root.ungrab_key(keystate.code, keystate.mod | extra_mod)
         else:
             # Listen for the specified key.
             for extra_mod in extra_mods:
-                root.grab_key(
-                    keystate.code, keystate.mod | extra_mod,
-                    True, Xlib.X.GrabModeAsync, Xlib.X.GrabModeAsync)
+                for keystate in keystates:
+                    root.grab_key(
+                        keystate.code, keystate.mod | extra_mod,
+                        True, Xlib.X.GrabModeAsync, Xlib.X.GrabModeAsync)
 
-    def _wait_for_keyrelease_event(self, keystate):
-        "After the grab, wait for the expected keypress."
+    def _wait_for_keyrelease_event(self, keystates):
+        "After the grab, wait for the expected keypresses."
+        codes = [keystate.code for keystate in keystates]
         while True:
             event = self.display.next_event()
-            if (event.type == Xlib.X.KeyRelease and
-                    event.detail == keystate.code):
+            if event.type == Xlib.X.KeyRelease and event.detail in codes:
                 # Ignore event.window and event.child. They are not the
                 # input windows we're after.
                 break
