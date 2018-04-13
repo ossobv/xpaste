@@ -8,7 +8,7 @@ if __name__ == '__main__':
 
     setup(
         name='xpaste',
-        version='1.2',
+        version='1.3',
         scripts=['xpaste'],
         data_files=[
             ('share/doc/xpaste', ['LICENSE.txt', 'README.rst']),

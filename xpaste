@@ -89,7 +89,7 @@ class KeysToKeystates(object):
         # Example: [(56, 0), (56, 2)]  # for 98 ('b')
         # Example: [(14, 1), (14, 3)]  # for 37 ('%')
         # Example: [(36, 0), (36, 2)]  # for 65293 (Return)
-        codes = self.display.keysym_to_keycodes(symbol)
+        codes = list(self.display.keysym_to_keycodes(symbol))
         assert codes, 'cannot map %r (got: %r)' % (symbol, codes)
         code, mod = codes[0]
         assert mod in (0, Xlib.X.ShiftMask), codes
