@@ -8,10 +8,12 @@ if __name__ == '__main__':
 
     setup(
         name='xpaste',
-        version='1.1',
+        version='1.2',
         scripts=['xpaste'],
-        data_files=[('', ['LICENSE.txt', 'README.rst'])],
-        install_requires = [
+        data_files=[
+            ('share/doc/xpaste', ['LICENSE.txt', 'README.rst']),
+            ('share/man/man1', ['xpaste.1x'])],
+        install_requires=[
             'python-xlib',  # >=0.14 ?
         ],
         description=(
@@ -32,6 +34,7 @@ if __name__ == '__main__':
             'Programming Language :: Python :: 2.7',
             'Programming Language :: Python :: 3.4',
             'Programming Language :: Python :: 3.5',
+            'Programming Language :: Python :: 3.6',
             'Topic :: Terminals :: Terminal Emulators/X Terminals',
             'Topic :: Utilities',
         ],
