@@ -8,7 +8,7 @@ if __name__ == '__main__':
 
     setup(
         name='xpaste',
-        version='1.3',
+        version='1.4',
         scripts=['xpaste'],
         data_files=[
             ('share/doc/xpaste', ['LICENSE.txt', 'README.rst']),
@@ -35,6 +35,8 @@ if __name__ == '__main__':
             'Programming Language :: Python :: 3.4',
             'Programming Language :: Python :: 3.5',
             'Programming Language :: Python :: 3.6',
+            'Programming Language :: Python :: 3.7',
+            'Programming Language :: Python :: 3.8',
             'Topic :: Terminals :: Terminal Emulators/X Terminals',
             'Topic :: Utilities',
         ],
