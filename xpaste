@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # xpaste - paste text into X11 windows that don't work with selections
-# Copyright (C) 2016,2018  Walter Doekes, OSSO B.V.
+# Copyright (C) 2016,2018,2020  Walter Doekes, OSSO B.V.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ class TextToKeysyms(object):
         '\n': 'Return',
         # Mark this bad so we don't paste it accidentally.
         '\r': Xlib.X.NoSymbol,
-        '\e': 'Escape', '!': 'exclam', '#': 'numbersign',
+        '\x1b': 'Escape', '!': 'exclam', '#': 'numbersign',
         '%': 'percent', '$': 'dollar', '&': 'ampersand', '"': 'quotedbl',
         "'": 'apostrophe', '(': 'parenleft', ')': 'parenright',
         '*': 'asterisk', '=': 'equal', '+': 'plus', ',': 'comma', '-': 'minus',
@@ -102,8 +102,7 @@ class EventGenerator(object):
         self.window = window
         self.root = display.screen().root
         self.keys_to_keystates = KeysToKeystates(display)
-        self.timedelta = 50  # 50 ms per event
-        self.time = (int(time.time() * 1000) - self.timedelta) % 0x100000000
+        self.auto_time = Xlib.X.CurrentTime
         self.rshift_code = self.display.keysym_to_keycode(Xlib.XK.XK_Shift_R)
 
     def from_text(self, text):
@@ -113,7 +112,19 @@ class EventGenerator(object):
                 yield event
 
     def keypress(self, keystate):
-        # Some applications explicitly need the SHIFT key pressed as well.
+        # Some applications (*) have trouble with the 187/188
+        # parenleft/parenright:
+        # $ xmodmap -pke | grep dollar
+        # keycode  13 = 4 dollar 4 dollar
+        # $ xmodmap -pke | grep paren
+        # keycode  18 = 9 parenleft 9 parenleft
+        # keycode  19 = 0 parenright 0 parenright
+        # keycode 187 = parenleft NoSymbol parenleft
+        # keycode 188 = parenright NoSymbol parenright
+        if keystate.mod == 0 and keystate.code in (187, 188):
+            keystate = Keystate(Xlib.X.ShiftMask, keystate.code - 169)
+
+        # Some applications (*) explicitly need the SHIFT key pressed as well.
         if keystate.mod & Xlib.X.ShiftMask:
             yield self._new_press(state=0, detail=self.rshift_code)
 
@@ -124,6 +135,8 @@ class EventGenerator(object):
             yield self._new_release(
                 state=Xlib.X.ShiftMask, detail=self.rshift_code)
 
+        # (*) Java iKVM Viewer
+
     def _new_press(self, state, detail):
         return self._new_event(Xlib.protocol.event.KeyPress, state, detail)
 
@@ -132,14 +145,18 @@ class EventGenerator(object):
 
     def _new_event(self, event, state, detail):
         return event(
-            time=self.key_time(), root=self.root, window=self.window,
-            same_screen=0, child=Xlib.X.NONE,
+            # Time should be client-send-time (since X-server startup?) or
+            # CurrentTime to use current server time. Since we'll be sleeping
+            # below, the current time should be perfect for our needs.
+            time=self.auto_time,
+            # We absolutely need window. Unsure about root, display,
+            # same_screen, child.
+            window=self.window, root=self.root, display=self.display,
+            same_screen=True, child=Xlib.X.NONE,
+            # Where the event was raised. For keypress this doesn't matter.
             root_x=0, root_y=0, event_x=0, event_y=0,
+            # The important bits: key code and key modifier.
             state=state, detail=detail)
-
-    def key_time(self):
-        self.time = (self.time + self.timedelta) % 0x100000000
-        return self.time
 
 
 class XPaste(object):
@@ -237,7 +254,15 @@ class XPaste(object):
         "Paste the text into window by faking key presses."
         # print('paste into', window)
         for event in EventGenerator(self.display, window).from_text(text):
-            window.send_event(event, propagate=True)
+            # I'm not entirely sure how much we want to sleep here. But
+            # with enough sleep and window.display.flush() we can
+            # transfer all data.
+            # On my test machine, 4ms was too little and 10ms was enough.
+            # So 20ms per lowercase and 40ms for uppercase, an average of 30ms
+            # per letter: about 33 letters per second.
+            time.sleep(0.010)  # 10ms between keypresses/keyreleases
+            window.send_event(event)
+            window.display.flush()
         self.display.sync()
 
 
