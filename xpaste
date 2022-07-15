@@ -35,6 +35,7 @@ if os.environ.get('XDG_SESSION_TYPE') == 'wayland':
     import fcntl
     import select
     import struct
+    import termios
 
     MODE = 'wayland'
     KEY_NO_SYMBOL = None
@@ -125,6 +126,76 @@ class TextToKeysyms(object):
 # A functor as text-to-keys converter.
 text_to_keysyms = TextToKeysyms()
 text_to_usbkeys = TextToUsbKeys()
+
+
+class RawTerminalInput(object):
+    @staticmethod
+    def cfmakeraw(iflag, oflag, cflag, lflag, ispeed, ospeed, cc):
+        iflag &= ~(
+            termios.IGNBRK | termios.BRKINT | termios.PARMRK | termios.ISTRIP |
+            termios.INLCR | termios.IGNCR | termios.ICRNL | termios.IXON)
+        oflag &= ~termios.OPOST
+        cflag &= ~(termios.CSIZE | termios.PARENB)
+        lflag &= ~(
+            termios.ECHO | termios.ECHONL | termios.ICANON | termios.ISIG |
+            termios.IEXTEN)
+        return [iflag, oflag, cflag, lflag, ispeed, ospeed, cc]
+
+    def __enter__(self):
+        try:
+            self.open()
+        except Exception:
+            self.close(can_raise=False)
+            raise
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close(can_raise=(exc_type is None))
+
+    def open(self):
+        assert not hasattr(self, '_fd')
+        self._fd = os.open('/dev/tty', os.O_RDONLY)
+        self._orig_attr = self._make_raw(self._fd)
+
+    def close(self, can_raise=True):
+        try:
+            termios.tcsetattr(self._fd, termios.TCSADRAIN, self._orig_attr)
+        except AttributeError:
+            pass
+        except Exception:
+            if can_raise:
+                raise
+        else:
+            del self._orig_attr
+        finally:
+            try:
+                os.close(self._fd)
+            except AttributeError:
+                pass
+            except Exception:
+                if can_raise:
+                    raise
+            else:
+                del self._fd
+
+    def _make_raw(self, fd):
+        orig_attr = termios.tcgetattr(fd)
+        try:
+            new_attr = self.cfmakeraw(*termios.tcgetattr(fd))
+            termios.tcsetattr(fd, termios.TCSADRAIN, new_attr)
+        except Exception:
+            try:
+                termios.tcsetattr(fd, termios.TCSADRAIN, orig_attr)
+            except Exception:
+                pass
+            raise
+        return orig_attr
+
+    def fileno(self):
+        return self._fd
+
+    def getc(self):
+        return ord(os.read(self._fd, 1))
 
 
 class KeysToKeystates(object):
@@ -413,26 +484,9 @@ class UInputPaste(object):
         Re-open tty to be able to ask the user to raise/lower the
         timeout and then wait for the specified timeout.
         """
-        import termios
-        fd = os.open('/dev/tty', os.O_RDONLY)
-        old = None
-        try:
-            old = termios.tcgetattr(fd)
-            new = termios.tcgetattr(fd)
 
-            # cfmakeraw()
-            new[0] &= ~(  # iflag
-                termios.IGNBRK | termios.BRKINT | termios.PARMRK |
-                termios.ISTRIP | termios.INLCR | termios.IGNCR |
-                termios.ICRNL | termios.IXON)
-            new[1] &= ~termios.OPOST  # oflag
-            new[2] &= ~(  # cflag
-                termios.CSIZE | termios.PARENB)
-            new[3] &= ~(
-                termios.ECHO | termios.ECHONL | termios.ICANON |
-                termios.ISIG | termios.IEXTEN)
-            termios.tcsetattr(fd, termios.TCSADRAIN, new)
-
+        with RawTerminalInput() as fp:
+            fd = fp.fileno()
             t0 = time.time()
             tn = t0 + 20
             while tn > t0:
@@ -440,18 +494,13 @@ class UInputPaste(object):
                     '\x1b[2K\r(pasting in {:.1f} seconds)'
                     .format((tn - t0)))
                 sys.stderr.flush()
-                ret = select.select([fd], [], [fd], 0.1)
-                assert not ret[2], ret
-                if ret[0]:
-                    ch = ord(os.read(fd, 1))
-                    if ch == 0x03:
+                rev, wev, xev = select.select([fd], [], [fd], 0.1)
+                assert not xev, (rev, wev, xev)
+                if rev:
+                    if fp.getc() == 0x03:
                         raise KeyboardInterrupt
                     tn = max(tn - 3, time.time() + 4)
                 t0 = time.time()
-        finally:
-            if old is not None:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old)
-            os.close(fd)
         sys.stderr.write('\x1b[2K\r')
         sys.stderr.flush()
 
