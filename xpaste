@@ -60,21 +60,25 @@ class TextToUsbKeys(object):
     IGNORE_CHARS = '\r'
 
     def __init__(self):
-        keycodes = {' ': (self.KEY_SPACE,)}
+        used = set([self.KEY_SPACE, self.KEY_LSHIFT])
+        combos = {' ': (self.KEY_SPACE,)}
         for keycode, ch in enumerate(self.LEV1):
             if ch != ' ':
-                keycodes[ch] = (keycode,)
+                combos[ch] = (keycode,)
+                used.add(keycode)
         for keycode, ch in enumerate(self.LEV2):
             if ch != ' ':
-                keycodes[ch] = (self.KEY_LSHIFT, keycode)
-        self.keycodes = keycodes
+                combos[ch] = (self.KEY_LSHIFT, keycode)
+                used.add(keycode)
+        self.char_to_combos = combos
+        self.used_keycodes = tuple(sorted(used))
 
     def __call__(self, text):
         ret = []
         missing = set()
         for ch in text:
             try:
-                ret.append(self.keycodes[ch])
+                ret.append(self.char_to_combos[ch])
             except KeyError:
                 if ch not in self.IGNORE_CHARS:
                     missing.add(ch)
@@ -365,8 +369,8 @@ class UInputPaste(object):
     def _open(self):
         fd = os.open('/dev/uinput', os.O_WRONLY | os.O_NONBLOCK)
         fcntl.ioctl(fd, self.UI_SET_EVBIT, self.EV_KEY)
-        for i in range(0, 255):
-            fcntl.ioctl(fd, self.UI_SET_KEYBIT, i) #self.KEY_SPACE)
+        for keycode in text_to_usbkeys.used_keycodes:
+            fcntl.ioctl(fd, self.UI_SET_KEYBIT, keycode)
 
         usetup = self.uinput_setup(
             bustype=self.BUS_USB,
