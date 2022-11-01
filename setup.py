@@ -8,13 +8,13 @@ if __name__ == '__main__':
 
     setup(
         name='xpaste',
-        version='1.4',
+        version='1.5',
         scripts=['xpaste'],
         data_files=[
             ('share/doc/xpaste', ['LICENSE.txt', 'README.rst']),
             ('share/man/man1', ['xpaste.1x'])],
         install_requires=[
-            'python-xlib',  # >=0.14 ?
+            'python-xlib',  # >=0.14 ? not needed for Wayland..
         ],
         description=(
             "paste text into X windows that don't work with selections"),
@@ -32,11 +32,7 @@ if __name__ == '__main__':
             'Operating System :: POSIX :: Linux',
             'Environment :: X11 Applications',
             'Programming Language :: Python :: 2.7',
-            'Programming Language :: Python :: 3.4',
-            'Programming Language :: Python :: 3.5',
-            'Programming Language :: Python :: 3.6',
-            'Programming Language :: Python :: 3.7',
-            'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3',
             'Topic :: Terminals :: Terminal Emulators/X Terminals',
             'Topic :: Utilities',
         ],
