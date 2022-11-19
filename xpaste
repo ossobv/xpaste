@@ -377,7 +377,7 @@ class X11Paste(object):
     def paste_into(self, window):
         "Paste the text into window by faking key presses."
         # print('paste into', window)
-        for event in X11EventGenerator(self.display, window).from_text(
+        for event in X11EventGenerator(self.display, window).from_keysyms(
                 self._buffer):
             # I'm not entirely sure how much we want to sleep here. But
             # with enough sleep and window.display.flush() we can
