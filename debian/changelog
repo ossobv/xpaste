@@ -1,3 +1,9 @@
+xpaste (1.6) UNRELEASED; urgency=low
+
+  * Unbreak X11 version. Thanks Florian @gador for the reminder.
+
+ -- Walter Doekes <wjdoekes+xpaste@osso.nl>  Mon, 21 Nov 2022 13:57:45 +0100
+
 xpaste (1.5) UNRELEASED; urgency=low
 
   * Fix so pasting works in Wayland. Uses /dev/uinput for keypresses. Uses a
