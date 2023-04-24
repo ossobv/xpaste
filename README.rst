@@ -41,6 +41,19 @@ can see from the example, it works.
 attach a virtual keyboard.**
 
 
+NOTES
+-----
+
+Users on *Wayland* experiencing ``PermissionError: [Errno 13] Permission
+denied: '/dev/uinput'`` should add a *udev rule* in
+``/etc/udev/rules.d/40-uinput.rules``::
+
+    KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"
+
+And run ``udevadm trigger`` once. Afterwards their user should appear in
+the ``getfacl /dev/uinput`` output as ``user:someuser:rw-``.
+
+
 COPYRIGHT
 ---------
 
